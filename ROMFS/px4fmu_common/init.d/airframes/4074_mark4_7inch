@@ -1,0 +1,208 @@
+#!/bin/sh
+#
+# @name GEPRC Mark4 7inch
+#
+# @type Quadrotor x
+# @class Copter
+#
+# @maintainer EmberWatch Team
+#
+# Hardware:
+#   Frame:   GEPRC Mark4 7" V2 (295mm wheelbase)
+#   FC:      Holybro Kakute H7 v1.5
+#   ESC:     Tekko32 F4 4-in-1 50A (DShot600)
+#   Motors:  Xrotor 2807 1300KV
+#   Props:   HQProp 7.5x3x3
+#   AUW:     ~1120g (with 2x1500mAh 6S parallel)
+#   Comp:    Jetson Orin Nano 8GB (offboard via uXRCE-DDS)
+#   VIO:     OpenVINS (IMX219-160 + IMU) -> EKF2 EV fusion
+#   Range:   VL53L1X (I2C, pointing down)
+#   RC:      RadioMaster RP3 ExpressLRS 2.4GHz (CRSF on UART6)
+#
+# @board px4_fmu-v2 exclude
+# @board bitcraze_crazyflie exclude
+#
+
+. ${R}etc/init.d/rc.mc_defaults
+
+# =============================================================================
+# POWER - Battery
+# =============================================================================
+param set-default BAT1_N_CELLS 6
+param set-default BAT1_V_CHARGED 4.20
+param set-default BAT1_V_EMPTY 3.50
+param set-default BAT1_CAPACITY 3000          # 2x1500mAh parallel
+
+# =============================================================================
+# SENSORS - GPS / Compass (disabled - indoor VIO only)
+# =============================================================================
+param set-default GPS_1_CONFIG 0
+param set-default SENS_MAG_AUTOROT 0
+param set-default SYS_HAS_MAG 0
+
+# =============================================================================
+# SENSORS - Rangefinder (VL53L1X, I2C, pointing down)
+# =============================================================================
+param set-default SENS_EN_VL53L1X 1
+
+# =============================================================================
+# SERIAL PORTS
+# =============================================================================
+# RC: CRSF on UART6 (RP3 ExpressLRS, /dev/ttyS4)
+param set-default RC_PORT_CONFIG 300          # Radio Controller = USART6 (/dev/ttyS4)
+
+# uXRCE-DDS: UART4 / GPS1 port (R4-T4 pads, /dev/ttyS3) for Jetson ROS 2 bridge
+# NOTE: R3/T3 (USART3) is the NuttX debug console - cannot be used for uXRCE-DDS.
+#       TELEM2 (USART2) has no exposed pads (internal BT footprint).
+#       UART4/GPS1 is free since GPS is disabled (GPS_1_CONFIG=0).
+param set-default UXRCE_DDS_CFG 201          # GPS1 (UART4 / R4-T4 / /dev/ttyS3)
+param set-default SER_GPS1_BAUD 921600
+
+# ESC telemetry: Tekko32 TLM pad -> Kakute R7 (UART7 / /dev/ttyS5)
+# UART7 is hardwired by rc.board_extras: `dshot telemetry -d /dev/ttyS5`
+# No param needed - just wire Tekko32 TLM -> R7. One-way RX only, no TX.
+
+# =============================================================================
+# ESC - DShot600
+# =============================================================================
+# DSHOT_CONFIG removed in PX4 v1.14; speed is set per-timer via PWM_MAIN_TIM*
+# SYS_USE_IO removed in PX4 v1.15; Kakute H7 has no IO board
+param set-default PWM_MAIN_TIM0 -3           # DShot600 (timer group 0: outputs 1-4)
+param set-default PWM_MAIN_TIM1 -3           # DShot600 (timer group 1: outputs 5-8)
+
+# =============================================================================
+# ESC - Output mapping (FMU outputs direct, no IO board)
+# =============================================================================
+param set-default PWM_MAIN_FUNC1 101         # Motor 1 - Front Right
+param set-default PWM_MAIN_FUNC2 102         # Motor 2 - Rear Left
+param set-default PWM_MAIN_FUNC3 103         # Motor 3 - Front Left
+param set-default PWM_MAIN_FUNC4 104         # Motor 4 - Rear Right
+
+# =============================================================================
+# IMU - Filtering (7" props, lower vibration than 5")
+# =============================================================================
+param set-default IMU_GYRO_CUTOFF 60
+param set-default IMU_DGYRO_CUTOFF 35
+param set-default IMU_GYRO_RATEMAX 1600
+
+# =============================================================================
+# EKF2 - External Vision (VIO) fusion
+# =============================================================================
+
+# -- Fusion mode --
+param set-default EKF2_EV_CTRL 15            # bitmask: bit0=hpos, bit1=vpos, bit2=vel, bit3=yaw - all fused
+param set-default EKF2_HGT_REF 2             # height source = rangefinder (VL53L1X); EV fuses XY+yaw only
+param set-default EKF2_RNG_CTRL 2            # rangefinder always-on (replaces EKF2_RNG_AID in v1.15+)
+
+# -- GPS fusion - fully disabled (GNSS-denied indoor flight) --
+param set-default EKF2_GPS_CTRL 0            # disable all GPS fusion (position, velocity, heading)
+param set-default EKF2_GPS_MODE 0            # prevents EKF2 resets from re-acquired GPS indoors
+
+# -- Timing - measure from ROS 2 bag replay and update --
+param set-default EKF2_EV_DELAY 50           # pipeline latency in ms; must be < EKF2_DELAY_MAX (300 ms)
+
+# -- Noise floors - EKF2 clamps reported covariance to max(reported, noise^2) --
+param set-default EKF2_EVP_NOISE 0.1         # EV position noise floor (m)
+param set-default EKF2_EVV_NOISE 0.1         # EV velocity noise floor (m/s)
+param set-default EKF2_EVA_NOISE 0.05        # EV attitude/yaw noise floor (rad)
+
+# -- Innovation gates - measurements outside N*sigma are rejected --
+param set-default EKF2_EVP_GATE 5            # EV position gate (SD)
+param set-default EKF2_EVV_GATE 3            # EV velocity gate (SD), tighter than position
+
+# -- Camera-to-IMU lever arm offset (metres) - measure your mount --
+param set-default EKF2_EV_POS_X 0.05         # forward
+param set-default EKF2_EV_POS_Y 0.0          # right
+param set-default EKF2_EV_POS_Z 0.02         # down
+
+# =============================================================================
+# CIRCUIT BREAKERS
+# =============================================================================
+param set-default CBRK_SUPPLY_CHK 894281     # disable supply voltage check (no PX4IO board)
+param set-default CBRK_IO_SAFETY 22027       # disable safety switch requirement (no physical switch on Kakute H7)
+
+# =============================================================================
+# ARMING - Indoor / GPS-denied
+# =============================================================================
+param set-default COM_ARM_WO_GPS 1           # allow arming without GPS (indoor VIO build - no GPS)
+param set-default COM_POWER_COUNT 0          # require 0 power modules detected before arming check
+
+# =============================================================================
+# OFFBOARD - Failsafe
+# =============================================================================
+param set-default COM_RCL_EXCEPT 4           # suppress RC-loss failsafe while in OFFBOARD mode
+param set-default COM_OF_LOSS_T 1.0          # switch to HOLD after 1s without offboard setpoints
+
+# =============================================================================
+# GEOFENCE - Indoor arena (Nokia Arena ~60m mission radius + margin)
+# =============================================================================
+param set-default GF_MAX_HOR_DIST 69.0       # 69m radius from arm point
+param set-default GF_MAX_VER_DIST 4.0        # 4m ceiling (flight ceiling 3m + 1m margin)
+param set-default GF_ACTION 2                # Hold at fence boundary
+
+# =============================================================================
+# BATTERY FAILSAFE
+# =============================================================================
+param set-default COM_LOW_BAT_ACT 2          # auto-land on low battery
+
+# =============================================================================
+# CONTROL - Rate PIDs (starting point for ~1120g 7" build, tune via autotune)
+# =============================================================================
+param set-default MC_ROLLRATE_P 0.10
+param set-default MC_ROLLRATE_I 0.20
+param set-default MC_ROLLRATE_D 0.002
+param set-default MC_ROLLRATE_MAX 720
+param set-default MC_ROLL_P 7
+
+param set-default MC_PITCHRATE_P 0.10
+param set-default MC_PITCHRATE_I 0.20
+param set-default MC_PITCHRATE_D 0.002
+param set-default MC_PITCHRATE_MAX 720
+param set-default MC_PITCH_P 7
+
+param set-default MC_YAWRATE_P 0.15
+param set-default MC_YAWRATE_I 0.10
+param set-default MC_YAWRATE_MAX 360
+param set-default MC_YAW_P 3
+
+# =============================================================================
+# CONTROL - Throttle / Hover
+# =============================================================================
+param set-default MPC_THR_HOVER 0.45         # ~1120g AUW on 6S - tune after first hover
+param set-default MPC_THR_MIN 0.05
+param set-default MPC_THR_MAX 0.95
+param set-default MPC_MANTHR_MIN 0.0
+param set-default MPC_MAN_TILT_MAX 35
+param set-default THR_MDL_FAC 0.4
+param set-default MC_AIRMODE 1
+
+# =============================================================================
+# CONTROL - Position (conservative for indoor)
+# =============================================================================
+param set-default MPC_XY_VEL_MAX 2.0         # m/s max horizontal speed
+param set-default MPC_Z_VEL_MAX_UP 1.5
+param set-default MPC_Z_VEL_MAX_DN 1.0
+param set-default MPC_ACC_HOR 2.0
+param set-default MPC_JERK_MAX 4.0
+param set-default NAV_ACC_RAD 0.3            # waypoint acceptance radius (m)
+
+# =============================================================================
+# GEOMETRY - Rotor positions (square X, 295mm wheelbase, arm ~147mm from centre)
+# =============================================================================
+param set-default CA_ROTOR_COUNT 4
+# Rotor 0: Front Right, CCW (km positive = CCW)
+param set-default CA_ROTOR0_PX  0.147
+param set-default CA_ROTOR0_PY  0.147
+param set-default CA_ROTOR0_KM  0.05
+# Rotor 1: Rear Left, CCW
+param set-default CA_ROTOR1_PX -0.147
+param set-default CA_ROTOR1_PY -0.147
+param set-default CA_ROTOR1_KM  0.05
+# Rotor 2: Front Left, CW (km negative = CW)
+param set-default CA_ROTOR2_PX  0.147
+param set-default CA_ROTOR2_PY -0.147
+param set-default CA_ROTOR2_KM -0.05
+# Rotor 3: Rear Right, CW
+param set-default CA_ROTOR3_PX -0.147
+param set-default CA_ROTOR3_PY  0.147
+param set-default CA_ROTOR3_KM -0.05

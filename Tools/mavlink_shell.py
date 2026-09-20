@@ -16,6 +16,15 @@ import os
 
 try:
     from pymavlink import mavutil
+    # Workaround for pymavlink 2.4.49 bug: _instances NoneType assignment
+    from pymavlink.mavutil import mavfile as _mavfile
+    _orig_post = _mavfile.post_message
+    def _safe_post(self, msg):
+        try:
+            _orig_post(self, msg)
+        except TypeError:
+            pass
+    _mavfile.post_message = _safe_post
 except ImportError as e:
     print("Failed to import pymavlink: " + str(e))
     print("")
@@ -174,7 +183,7 @@ def main():
                     if quit_time is None:
                         # run a bit longer to read the response (we could also
                         # read until we get a prompt)
-                        quit_time = timer() + 1
+                        quit_time = timer() + 15
                     break
 
                 # provide a simple shell with command history

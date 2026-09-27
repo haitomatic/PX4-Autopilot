@@ -46,6 +46,30 @@ set(ZENOH_DEBUG ${CONFIG_ZENOH_DEBUG} CACHE STRING "Debug print level" FORCE)
 set(PICO_STATIC ON)
 if(NOT DEFINED CONFIG_NET_TCPPROTO_OPTIONS AND CONFIG_PLATFORM_NUTTX)
     set(Z_FEATURE_TCP_NODELAY 0 CACHE STRING "Toggle TCP_NODELAY")
+
+    # No network stack configured on this board at all (e.g. a flight
+    # controller with no ethernet/wifi) -- zenoh-pico's unix backend still
+    # unconditionally compiles TCP/UDP link code by default, which needs
+    # getaddrinfo() etc. from a real BSD sockets implementation NuttX
+    # doesn't provide here. Must be disabled *before* add_subdirectory
+    # below, which is where zenoh-pico's own CMakeLists.txt reads these.
+    set(Z_FEATURE_LINK_TCP 0 CACHE STRING "Toggle TCP links" FORCE)
+    set(Z_FEATURE_LINK_UDP_UNICAST 0 CACHE STRING "Toggle UDP unicast links" FORCE)
+    set(Z_FEATURE_LINK_UDP_MULTICAST 0 CACHE STRING "Toggle UDP multicast links" FORCE)
+endif()
+
+# CONFIG_ZENOH_SERIAL used to be wired up below (after add_subdirectory) via
+# `target_compile_options(zenohpico_static PRIVATE -DZ_LINK_SERIAL)` -- but
+# that's stale: it predates zenoh-pico's own Z_FEATURE_LINK_SERIAL CMake
+# cache-variable convention (Z_LINK_SERIAL was the pre-refactor macro name),
+# and even if the name still matched, add_subdirectory(zenoh-pico) below is
+# where zenoh-pico reads Z_FEATURE_LINK_SERIAL to generate its config.h, so
+# setting it after that point would already be too late regardless. This was
+# genuinely dead/unreachable -- CONFIG_ZENOH_SERIAL never actually enabled
+# zenoh-pico's serial link before this fix, on top of the option itself
+# never being definable through Kconfig at all until now.
+if(CONFIG_ZENOH_SERIAL)
+    set(Z_FEATURE_LINK_SERIAL 1 CACHE STRING "Toggle Serial links" FORCE)
 endif()
 
 if(NOT DEFINED CONFIG_PTHREAD_MUTEX_TYPES AND CONFIG_PLATFORM_NUTTX)
@@ -80,10 +104,6 @@ target_compile_options(zenohpico_static PUBLIC -Wno-cast-align
 target_compile_options(zenohpico_static PRIVATE -Wno-missing-prototypes)
 if(CONFIG_PLATFORM_NUTTX)
     target_compile_options(zenohpico_static PRIVATE -DUNIX_NO_MULTICAST_IF)
-endif()
-
-if(CONFIG_ZENOH_SERIAL)
-    target_compile_options(zenohpico_static PRIVATE -DZ_LINK_SERIAL)
 endif()
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/default_topics.c

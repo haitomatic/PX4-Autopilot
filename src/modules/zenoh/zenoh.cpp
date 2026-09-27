@@ -220,9 +220,14 @@ int ZENOH::generate_rmw_zenoh_topic_liveliness_keyexpr(const z_id_t *id, const c
 
 bool ZENOH::waitForLink(const char *locator)
 {
-#ifdef __PX4_NUTTX
+#if defined(__PX4_NUTTX) && (Z_FEATURE_LINK_TCP == 1 || Z_FEATURE_LINK_UDP_UNICAST == 1)
 
-	// Only IP transports and scouting use the network interface.
+	// Only IP transports and scouting use the network interface -- boards
+	// with no network stack at all (e.g. Zenoh over serial/UART only) don't
+	// even have sys/socket.h's ifreq/SIOCGIFFLAGS available to compile this
+	// block, hence gating on Z_FEATURE_LINK_TCP/UDP_UNICAST as well as
+	// __PX4_NUTTX (both are disabled together for those boards, see
+	// src/modules/zenoh/CMakeLists.txt).
 	if (locator[0] != '\0' && strncmp(locator, "tcp/", 4) != 0 && strncmp(locator, "udp/", 4) != 0) {
 		return !should_exit();
 	}

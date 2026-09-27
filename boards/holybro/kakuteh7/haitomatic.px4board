@@ -32,9 +32,6 @@ CONFIG_ZENOH_DEFAULT_LOCATOR="serial//dev/ttyS3#baudrate=921600"
 #     "tune via autotune".
 #   MODULES_LOGGER -- ULog download over MAVLink is already implemented and
 #     tested (onboard-doctor's px4_mavlink_bridge.py).
-#   COMMON_MAGNETOMETER / MODULES_MAG_BIAS_ESTIMATOR -- no magnetometer on
-#     the Jetson companion computer, so the FC's own onboard mag is the only
-#     heading reference available (SYS_HAS_MAG=1 in the airframe file).
 # =============================================================================
 
 # Fixed-wing / VTOL -- this is a quad
@@ -93,3 +90,11 @@ CONFIG_MODULES_TEMPERATURE_COMPENSATION=n
 # (confirmed in 7inch_drone_project/deploy/hw-config.yaml)
 CONFIG_DRIVERS_IMU_BOSCH_BMI270=n
 CONFIG_DRIVERS_IMU_INVENSENSE_MPU6000=n
+
+# Kakute H7 has no onboard magnetometer at all (PX4's own board docs:
+# "I2C pad (SDA & SCL) for external GPS/Magnetometers" -- external-only,
+# and nothing is connected there on this build). SYS_HAS_MAG=1 would
+# always fail preflight with zero possible heading source to satisfy it --
+# reverted to 0 in the airframe file alongside this.
+CONFIG_COMMON_MAGNETOMETER=n
+CONFIG_MODULES_MAG_BIAS_ESTIMATOR=n

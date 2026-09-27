@@ -34,13 +34,14 @@ param set-default BAT1_V_EMPTY 3.50
 param set-default BAT1_CAPACITY 3000          # 2x1500mAh parallel
 
 # =============================================================================
-# SENSORS - GPS (disabled - indoor VIO only) / Compass (onboard FC mag --
-# no magnetometer on the Jetson companion computer, so the FC's own mag is
-# the only heading reference available)
+# SENSORS - GPS / Compass (both disabled - indoor VIO only, and this board
+# has no onboard magnetometer at all: PX4's own kakuteh7 docs describe its
+# I2C pad as "for external GPS/Magnetometers" -- external-only, and nothing
+# is connected there on this build. EKF2 relies on EV/VIO yaw fusion
+# instead of a compass -- see EKF2_EV_CTRL below.)
 # =============================================================================
 param set-default GPS_1_CONFIG 0
-param set-default SENS_MAG_AUTOROT 0         # onboard mag, fixed known orientation -- not external
-param set-default SYS_HAS_MAG 1              # require the onboard mag (no other heading source)
+param set-default SYS_HAS_MAG 0
 
 # =============================================================================
 # SENSORS - Rangefinder (VL53L1X, I2C, pointing down)

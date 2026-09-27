@@ -48,6 +48,15 @@ if MODULES_ZENOH
         default n
         ---help---
                 Enable per-publisher overrides for Zenoh publisher options
+
+    config ZENOH_SERIAL
+        bool "[EXPERIMENTAL] Enable serial (UART/USB-CDC) transport for Zenoh"
+        default n
+        ---help---
+                Build zenoh-pico with its serial link (Z_LINK_SERIAL) enabled, letting
+                ZENOH_DEFAULT_LOCATOR use a serial//<dev>#baudrate=<n> locator instead
+                of tcp/udp, for boards that talk Zenoh to a companion computer over a
+                UART or USB-CDC link rather than a network interface.
                 (cc/express/prio/rel) via config file and CLI.
                 Disable this to reduce flash usage and use only global
                 publisher parameters (ZENOH_PUB_CC/REL/EXPR/PRIO).

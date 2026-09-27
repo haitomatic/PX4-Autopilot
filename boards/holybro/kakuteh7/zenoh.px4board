@@ -1,0 +1,13 @@
+# Zenoh over serial (UART4 / GPS1 pads / /dev/ttyS3), replacing uXRCE-DDS on
+# the same physical wire to the Jetson companion computer -- see
+# ROMFS/px4fmu_common/init.d/airframes/4074_mark4_7inch for the wiring
+# rationale (why GPS1 and not TELEM1/TELEM2 -- no exposed pads on this board).
+#
+# Requires src/modules/zenoh/zenoh-pico pinned to haitomatic/zenoh-pico's
+# haitomatic-main (adds the unix/NuttX serial link backend -- upstream
+# eclipse-zenoh/zenoh-pico and px4/zenoh-pico both lack it, see that fork's
+# feature/nuttx-unix-serial-link).
+CONFIG_MODULES_UXRCE_DDS_CLIENT=n
+CONFIG_MODULES_ZENOH=y
+CONFIG_ZENOH_SERIAL=y
+CONFIG_ZENOH_DEFAULT_LOCATOR="serial//dev/ttyS3#baudrate=921600"

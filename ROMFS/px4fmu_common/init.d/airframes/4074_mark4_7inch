@@ -5,7 +5,7 @@
 # @type Quadrotor x
 # @class Copter
 #
-# @maintainer EmberWatch Team
+# @maintainer Haitomatic
 #
 # Hardware:
 #   Frame:   GEPRC Mark4 7" V2 (295mm wheelbase)
@@ -34,11 +34,13 @@ param set-default BAT1_V_EMPTY 3.50
 param set-default BAT1_CAPACITY 3000          # 2x1500mAh parallel
 
 # =============================================================================
-# SENSORS - GPS / Compass (disabled - indoor VIO only)
+# SENSORS - GPS (disabled - indoor VIO only) / Compass (onboard FC mag --
+# no magnetometer on the Jetson companion computer, so the FC's own mag is
+# the only heading reference available)
 # =============================================================================
 param set-default GPS_1_CONFIG 0
-param set-default SENS_MAG_AUTOROT 0
-param set-default SYS_HAS_MAG 0
+param set-default SENS_MAG_AUTOROT 0         # onboard mag, fixed known orientation -- not external
+param set-default SYS_HAS_MAG 1              # require the onboard mag (no other heading source)
 
 # =============================================================================
 # SENSORS - Rangefinder (VL53L1X, I2C, pointing down)

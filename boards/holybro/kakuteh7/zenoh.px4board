@@ -11,3 +11,85 @@ CONFIG_MODULES_UXRCE_DDS_CLIENT=n
 CONFIG_MODULES_ZENOH=y
 CONFIG_ZENOH_SERIAL=y
 CONFIG_ZENOH_DEFAULT_LOCATOR="serial//dev/ttyS3#baudrate=921600"
+
+# =============================================================================
+# Debloat: this airframe (ROMFS/px4fmu_common/init.d/airframes/4074_mark4_7inch)
+# is a quad, offboard-mode + external-vision (EV/VIO) only -- no fixed-wing,
+# no VTOL, no missions/manual RC flight modes, no GPS, no camera trigger, no
+# gimbal. Disabling everything default.px4board ships that this airframe's
+# own params/hardware confirm are unused, to fit CONFIG_ZENOH_SERIAL's extra
+# flash cost (build originally overflowed FLASH by ~75KB with these all on).
+#
+# Kept, not cut, despite not being "offboard/EV core" -- each for a specific
+# reason, not an oversight:
+#   MODULES_NAVIGATOR + MODULES_DATAMAN  -- geofence (GF_MAX_HOR_DIST etc.,
+#     set in the airframe file) is enforced by Navigator; cutting it drops
+#     that safety net entirely.
+#   MODULES_MANUAL_CONTROL / MODULES_RC_UPDATE / DRIVERS_RC_INPUT -- CRSF RC
+#     (RC_PORT_CONFIG=300) is physically wired; still the arm/kill-switch
+#     path even in pure-offboard operation.
+#   MODULES_MC_AUTOTUNE_ATTITUDE_CONTROL -- airframe's own comment says
+#     "tune via autotune".
+#   MODULES_LOGGER -- ULog download over MAVLink is already implemented and
+#     tested (onboard-doctor's px4_mavlink_bridge.py).
+#   COMMON_MAGNETOMETER / MODULES_MAG_BIAS_ESTIMATOR -- no magnetometer on
+#     the Jetson companion computer, so the FC's own onboard mag is the only
+#     heading reference available (SYS_HAS_MAG=1 in the airframe file).
+# =============================================================================
+
+# Fixed-wing / VTOL -- this is a quad
+CONFIG_MODULES_FW_ATT_CONTROL=n
+CONFIG_MODULES_FW_AUTOTUNE_ATTITUDE_CONTROL=n
+CONFIG_MODULES_FW_MODE_MANAGER=n
+CONFIG_MODULES_FW_LATERAL_LONGITUDINAL_CONTROL=n
+CONFIG_MODULES_FW_RATE_CONTROL=n
+CONFIG_MODULES_VTOL_ATT_CONTROL=n
+CONFIG_COMMON_DIFFERENTIAL_PRESSURE=n         # airspeed sensor, fixed-wing only
+CONFIG_MODULES_AIRSPEED_SELECTOR=n
+
+# No FC-driven camera trigger or gimbal -- camera goes straight to the
+# Jetson over CSI2, not through the FC
+CONFIG_MODULES_CAMERA_FEEDBACK=n
+CONFIG_DRIVERS_CAMERA_CAPTURE=n
+CONFIG_DRIVERS_CAMERA_TRIGGER=n
+CONFIG_MODULES_GIMBAL=n
+
+# No IR-beacon precision-landing payload
+CONFIG_MODULES_LANDING_TARGET_ESTIMATOR=n
+
+# VIO/EV replaces optical flow entirely
+CONFIG_COMMON_OPTICAL_FLOW=n
+
+# GPS_1_CONFIG=0 in the airframe file -- GPS explicitly disabled
+CONFIG_DRIVERS_GPS=n
+
+# Direct analog 2x1500mAh LiPo (BAT1_* params) -- no SMBus smart battery,
+# no separate power monitor IC wired
+CONFIG_DRIVERS_BATT_SMBUS=n
+CONFIG_DRIVERS_SMART_BATTERY_BATMON=n
+CONFIG_DRIVERS_POWER_MONITOR_INA226=n
+
+# CRSF carries its own telemetry; ESC telemetry is the separate DShot
+# mechanism (rc.board_extras: `dshot telemetry -d /dev/ttyS5`, kept via
+# DRIVERS_DSHOT + MODULES_ESC_BATTERY). This group is FrSky/HoTT/BST-style
+# RC-link telemetry protocols, not used here.
+CONFIG_COMMON_TELEMETRY=n
+
+# Legacy quaternion attitude estimator, redundant with EKF2 (the real one)
+CONFIG_MODULES_ATTITUDE_ESTIMATOR_Q=n
+
+# Optional dynamic notch filtering -- airframe already uses plain LPF
+# cutoffs (IMU_GYRO_CUTOFF/IMU_DGYRO_CUTOFF), not needed
+CONFIG_MODULES_GYRO_FFT=n
+
+# Simulation-In-Hardware dev/test feature, not a flight feature
+CONFIG_MODULES_SIMULATION_SIMULATOR_SIH=n
+
+# Optional IMU thermal-drift compensation -- indoor, normal operating
+# temperatures; re-enable if drift becomes an issue
+CONFIG_MODULES_TEMPERATURE_COMPENSATION=n
+
+# Wrong IMU drivers for this board revision -- actual IMU is ICM42688P
+# (confirmed in 7inch_drone_project/deploy/hw-config.yaml)
+CONFIG_DRIVERS_IMU_BOSCH_BMI270=n
+CONFIG_DRIVERS_IMU_INVENSENSE_MPU6000=n
